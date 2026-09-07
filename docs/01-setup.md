@@ -2,7 +2,7 @@
 
 **목표** 모니터 없이 SSH로 접속 가능한 ROS 2 개발 환경 구축
 
-**결과** `ssh daehan@192.168.45.100` 한 줄로 접속, ROS 2 노드 간 토픽 통신 검증 완료
+**결과** `ssh daehan@192.xxx.xx.xxx` 한 줄로 접속, ROS 2 노드 간 토픽 통신 검증 완료
 
 | 항목 | 값 |
 |---|---|
@@ -48,7 +48,7 @@ arp -a
 4. 접속
 
 ```cmd
-ssh daehan@<PI_IP>
+ssh daehan@<>
 ```
 
 ### 트러블슈팅 — 기기 식별
@@ -63,7 +63,7 @@ ssh daehan@<PI_IP>
 
 공유기 문제와 Pi 문제를 분리하고 싶을 때 유용하다.
 Pi를 PC 랜포트에 직접 연결하고 Windows 인터넷 연결 공유(ICS)를 켜면
-PC가 DHCP 서버 역할을 하며 `192.168.137.x` 대역을 배정한다.
+PC가 DHCP 서버 역할을 하며 `192.xxx.xxx.x` 대역을 배정한다.
 
 ```
 ncpa.cpl → Wi-Fi 속성 → 공유 탭
@@ -71,7 +71,7 @@ ncpa.cpl → Wi-Fi 속성 → 공유 탭
 → 홈 네트워킹 연결: 이더넷
 ```
 
-PC의 이더넷 IPv4가 `192.168.137.1`로 바뀌면 정상 동작 중이다.
+PC의 이더넷 IPv4가 `192.xxx.xxx.x`로 바뀌면 정상 동작 중이다.
 
 ---
 
@@ -228,12 +228,12 @@ network:
     wlan0:
       optional: true
       dhcp4: false
-      addresses: [192.168.45.100/24]
+      addresses: [192.xxx.xx.xx]
       routes:
         - to: default
-          via: 192.168.45.1
+          via: 192.xxx.xx.x
       nameservers:
-        addresses: [8.8.8.8, 1.1.1.1]
+        addresses: [x.x.x.x, x.x.x.x]
       regulatory-domain: "KR"
       access-points:
         "YOUR_SSID":
@@ -252,7 +252,7 @@ sudo netplan apply
 적용과 동시에 IP가 바뀌므로 기존 SSH 세션은 끊긴다. 새 주소로 재접속한다.
 
 ```cmd
-ssh daehan@192.168.45.100
+ssh daehan@192.xxx.xx.x
 ```
 
 > 설정에 자신이 없으면 `netplan apply` 대신 `sudo netplan try`를 쓴다.
@@ -266,7 +266,7 @@ ssh daehan@192.168.45.100
 - [x] SSH 접속 (유선 → 무선)
 - [x] ROS 2 Jazzy 설치, `$ROS_DISTRO` 확인
 - [x] talker / listener 토픽 통신
-- [x] 고정 IP `192.168.45.100`
+- [x] 고정 IP `192.xxx.xx.xxx`
 
 ---
 
