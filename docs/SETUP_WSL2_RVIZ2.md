@@ -21,7 +21,7 @@
   └ RPLIDAR A1M8 → /scan 발행
 
 * 같은 Wi-Fi(SK_F764_5G), 같은 ROS_DOMAIN_ID → DDS가 서로 자동 발견(discovery)
-* Pi IP: 192.168.45.100 / 노트북·WSL IP: 192.168.45.219 (미러 모드로 동일 대역)
+* Pi IP: 192.168.45.xxx / 노트북·WSL IP: 192.168.45.xxx (미러 모드로 동일 대역)
 ```
 
 **핵심 설계 판단**
@@ -54,8 +54,8 @@ wsl --install -d Ubuntu-24.04
   wsl --install -d Ubuntu-24.04
   ```
 - 첫 실행 시 Unix 계정 생성 (Pi와 동일하게 맞추면 혼선 적음):
-  - username: `daehan`
-  - password: `jungdaehan22` (입력해도 화면에 안 보이는 게 정상)
+  - username: `@`
+  - password: `@` (입력해도 화면에 안 보이는 게 정상)
 - 버전 확인:
   ```bash
   lsb_release -a          # Ubuntu 24.04.x LTS (noble) 확인
@@ -119,8 +119,8 @@ wsl -d Ubuntu-24.04
 
 WSL 재진입 후 IP 확인:
 ```bash
-ip addr | grep 192.168.45
-# 예: inet 192.168.45.219/24 ... eth1   ← 노트북과 같은 대역이면 성공
+ip addr | grep 192.168.xx
+# 예: inet 192.168.45.xxx ... eth1   ← 노트북과 같은 대역이면 성공
 ```
 
 > 미러 모드 전에는 172.x 같은 격리 IP가 뜬다. 192.168.45.x가 떠야 Pi와 같은 네트워크.
@@ -142,7 +142,7 @@ ros2 run demo_nodes_cpp listener
 
 **창 B — Pi (SSH, talker):**
 ```bash
-# (Windows에서) ssh daehan@192.168.45.100
+# (Windows에서) ssh daehan@192.168.45.xxx
 export ROS_DOMAIN_ID=0
 source /opt/ros/jazzy/setup.bash
 ros2 run demo_nodes_cpp talker
@@ -213,7 +213,7 @@ rviz2
 ## 8. 매번 켤 때 요약 (치트시트)
 
 ```bash
-# --- Pi (SSH: ssh daehan@192.168.45.100) ---
+# --- Pi (SSH: ssh daehan@192.168.45.xxx) ---
 export ROS_DOMAIN_ID=0
 source ~/ros2_ws/install/setup.bash
 ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:=/dev/rplidar
