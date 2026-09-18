@@ -44,15 +44,13 @@ void printHex(const std::vector<uint8_t>& pkt) {
 }
 
 // ===== 3-B: 아두이노 펌웨어 어댑터 (chk = LEN ^ CMD) =====
-// 펌웨어 파서: rxBuf[1]=LEN(0x01), rxBuf[2]=CMD, rxBuf[3]=chk==(len^cmd), rxBuf[4]=ETX
 std::vector<uint8_t> buildArduinoCmd(uint8_t cmd) {
     const uint8_t len = 0x01;
     uint8_t chk = static_cast<uint8_t>(len ^ cmd);
     return { STX, len, cmd, chk, ETX };   // 5바이트
 }
 
-// 센서 패킷: [STX][LEN=01][CMD][DATA][CHK=len^cmd... 실제론 펌웨어가 len^cmd^data로 보냄][ETX]
-// 펌웨어 sendPacket: chk = len ^ cmd ^ data → 여기 맞춰 검증
+// 센서 패킷: 펌웨어 sendPacket chk = len ^ cmd ^ data
 ParseResult parseArduinoSensor(const std::vector<uint8_t>& pkt) {
     if (pkt.size() != 6)    return { false, 0, {}, "not 6 bytes" };
     if (pkt[0] != STX)      return { false, 0, {}, "no STX" };
@@ -64,4 +62,14 @@ ParseResult parseArduinoSensor(const std::vector<uint8_t>& pkt) {
     uint8_t calc = static_cast<uint8_t>(len ^ cmd ^ data);
     if (chk != calc)        return { false, 0, {}, "checksum fail" };
     return { true, cmd, { data }, "ok" };
+}
+
+// ===== 4단계: 연속 PWM 명령 (7바이트, chk = LEN ^ CMD ^ L ^ R) =====
+std::vector<uint8_t> buildArduinoSetPWM(int8_t left, int8_t right) {
+    const uint8_t len = 0x03;
+    const uint8_t cmd = CMD_SET_PWM;
+    uint8_t l = static_cast<uint8_t>(left);
+    uint8_t r = static_cast<uint8_t>(right);
+    uint8_t chk = static_cast<uint8_t>(len ^ cmd ^ l ^ r);
+    return { STX, len, cmd, l, r, chk, ETX };   // 7바이트
 }
