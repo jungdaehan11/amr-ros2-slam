@@ -73,3 +73,23 @@ std::vector<uint8_t> buildArduinoSetPWM(int8_t left, int8_t right) {
     uint8_t chk = static_cast<uint8_t>(len ^ cmd ^ l ^ r);
     return { STX, len, cmd, l, r, chk, ETX };   // 7바이트
 }
+
+// ===== ★IMU: 센서 int16 패킷 (7바이트, chk = LEN ^ CMD ^ HI ^ LO) =====
+ParseResult parseArduinoSensor16(const std::vector<uint8_t>& pkt) {
+    if (pkt.size() != 7)    return { false, 0, {}, "not 7 bytes" };
+    if (pkt[0] != STX)      return { false, 0, {}, "no STX" };
+    if (pkt[6] != ETX)      return { false, 0, {}, "no ETX" };
+    uint8_t len = pkt[1];   // 0x02
+    uint8_t cmd = pkt[2];
+    uint8_t hi  = pkt[3];
+    uint8_t lo  = pkt[4];
+    uint8_t chk = pkt[5];
+    uint8_t calc = static_cast<uint8_t>(len ^ cmd ^ hi ^ lo);
+    if (chk != calc)        return { false, 0, {}, "checksum fail" };
+    return { true, cmd, { hi, lo }, "ok" };
+}
+
+int16_t dataToInt16(const std::vector<uint8_t>& data) {
+    if (data.size() < 2) return 0;
+    return static_cast<int16_t>((static_cast<uint16_t>(data[0]) << 8) | data[1]);
+}

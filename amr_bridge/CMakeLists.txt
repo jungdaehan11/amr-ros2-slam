@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_executable(bridge_node
   src/bridge_node.cpp
@@ -17,7 +18,7 @@ add_executable(bridge_node
 target_include_directories(bridge_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(bridge_node rclcpp geometry_msgs std_msgs)
+ament_target_dependencies(bridge_node rclcpp geometry_msgs std_msgs sensor_msgs)
 
 install(TARGETS bridge_node DESTINATION lib/${PROJECT_NAME})
 

@@ -15,6 +15,7 @@ enum Cmd : uint8_t {
     CMD_SET_PWM = 0x15,     // ★ 4단계 추가: 연속 PWM (L,R int8)
     CMD_DIST = 0x20,
     CMD_CURRENT = 0x21,
+    CMD_GYRO_Z = 0x22,      // ★IMU: 자이로 Z (int16 2바이트)
     CMD_HEARTBEAT = 0x30,
     CMD_WARN_ON = 0x40,
     CMD_WARN_OFF = 0x41,
@@ -44,3 +45,9 @@ ParseResult parseArduinoSensor(const std::vector<uint8_t>& pkt);
 //   주의: 이 명령만 chk에 DATA(L,R) 포함 — 기존 5바이트 명령(chk=len^cmd)과 비대칭.
 //   left/right: 부호 있는 8비트 (-127~127). 펌웨어에서 x2 스케일업 후 방향+PWM 분리.
 std::vector<uint8_t> buildArduinoSetPWM(int8_t left, int8_t right);
+
+// ★IMU 추가: 센서 int16 패킷 (7바이트)
+//   [STX][LEN=0x02][CMD][HI][LO][CHK=LEN^CMD^HI^LO][ETX]
+//   기존 6바이트 센서(chk=LEN^CMD^DATA)의 2바이트 확장판.
+ParseResult parseArduinoSensor16(const std::vector<uint8_t>& pkt);
+int16_t     dataToInt16(const std::vector<uint8_t>& data);
