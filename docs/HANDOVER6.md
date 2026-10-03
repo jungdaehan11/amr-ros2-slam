@@ -1,7 +1,7 @@
-# AMR 프로젝트 인수인계 (4단계 우선순위2 진행중 — IMU+EKF 센서퓨전 구축 완료, 매핑 품질 튜닝 단계)
+# AMR 프로젝트 인수인계 (★4단계 완료 — IMU+EKF 센서퓨전 + 실주행 SLAM 지도 생성 완료, 5단계 Nav2 진입 시점)
 
 > **이 문서 하나로 맥락 복원**: 새 대화에서 이 파일을 올리면 지금까지의 진행·설계판단·다음 할 일이 모두 복원됨.
-> 최종 갱신: 2026-10-03 (MPU-6050 IMU 통합 + robot_localization EKF 융합 완료)
+> 최종 갱신: 2026-10-03 (MPU-6050 IMU 통합 + EKF 융합 + **실주행 지도 my_real_map_v2 저장 완료**)
 > 이전 문서: HANDOVER5.md (4단계 개루프 캘리브레이션 완료 시점)
 
 ---
@@ -35,7 +35,7 @@
 
 ---
 
-## ✅ 이번 세션 완료 — IMU 통합 + EKF 센서 퓨전
+## ✅ 이번 세션 완료 — IMU 통합 + EKF 센서 퓨전 + **4단계 매핑 완료**
 
 ### 배경: 왜 IMU를 도입했나 (★면접 핵심 소재)
 
@@ -85,10 +85,10 @@ CMD: `0x10`전진 `0x11`후진 `0x12`좌 `0x13`우 `0x14`정지 / `0x15`연속PW
 ## ★ IMU 실측 데이터 (2026-10-03)
 
 - **I2C 주소**: 0x68 (기본)
-- **자이로 풀스케일**: ±250 °/s (131 LSB per °/s)
+- **자이로 풀스케일**: **±500 °/s (65.5 LSB per °/s)** — 급회전 saturation 대응으로 ±250에서 변경
 - **정지 시 바이어스**: 매우 작음 (raw 기준 ±0.3 dps) — 저가품치곤 양호
 - **부호**: 실측상 **왼쪽(반시계) 회전이 음수** → 펌웨어에서 `-1` 곱해 ROS REP-103(반시계=양수)에 맞춤
-- **송신 주기**: 20Hz (50ms). 초음파 `pulseIn` 블로킹 때문에 처음 11.6Hz → **SEND_INTERVAL 200ms, pulseIn 타임아웃 12000us로 조정하여 20Hz 확보**
+- **송신 주기**: **40Hz (25ms)**, 실측 37.6Hz. 초음파 `pulseIn` 블로킹 때문에 처음 11.6Hz → SEND_INTERVAL 250ms, pulseIn 타임아웃 12000us로 조정
 - **90도 회전 검증**: EKF yaw가 38° → 81° → 90.022° → 91°로 단조 증가, 멈추면 유지 ✅
 
 ---
@@ -225,7 +225,7 @@ rf2o를 `publish_tf: False`로 띄우는 전용 런치.
 **추가 파라미터**:
 | 파라미터 | 기본값 | 의미 |
 |---|---|---|
-| gyro_scale | 131.0 | LSB per °/s (±250dps) |
+| gyro_scale | 131.0 | LSB per °/s. **★실행 시 65.5로 줘야 함 (±500dps)** |
 | gyro_sign | 1.0 | 부호 반전용 (현재 1.0이 정상) |
 | imu_frame_id | imu_link | IMU 프레임 |
 | imu_angular_variance | 0.0004 | z축 각속도 분산 |
@@ -236,39 +236,78 @@ rf2o를 `publish_tf: False`로 띄우는 전용 런치.
 
 ---
 
-## ⚠️ 남은 문제 — 매핑 품질 (다음 세션 최우선)
+## ✅ 매핑 품질 문제 — 해결 완료
 
-**현재 상태**: 정지 시 및 완만한 주행에선 스캔이 지도에 잘 겹침. 그러나 **회전 후 일부 벽이 지도에서 벗어나는 현상**이 남아 있음. 지도가 쓸 만한 수준까지는 왔으나 완벽하지 않음.
+**원인 확정**: 자이로 샘플링 부족 + 측정범위 초과.
+4WD scrub 특성상 완전정지→회전 시 "버티다 툭 터지듯" 급회전하는데,
+- 20Hz(50ms) 샘플링으로는 그 순간의 회전 구간을 놓침 → 적분값이 실제보다 작게 나옴
+- ±250°/s 범위를 순간적으로 초과 → 값이 잘림(saturation)
 
-**아직 검증 안 된 후보들**:
-1. **자이로 20Hz 샘플링 부족** — scrub으로 툭 터지듯 급회전 시(순간 100°/s↑) 50ms 간격으로는 구간을 놓칠 수 있음. → 펌웨어 IMU_INTERVAL을 25ms(40Hz)로 올려볼 것
-2. **자이로 범위 ±250°/s 초과(saturation)** — 급회전 시 값이 잘릴 가능성. → GYRO_CONFIG를 0x08(±500dps)로 바꾸고 scale 65.5로 조정
-3. **IMU 타임스탬프** — 브릿지가 `now()` 사용(측정 시각 아님). rx_timer 5ms로 줄였으나 근본 해결은 아님
-4. **좌우 모터 편차로 직진이 휨** — `right_trim` 재조정 필요. 바닥 직선 따라 2m 주행 테스트로 값 찾기
-5. **4WD scrub 기동 특성** — 완전정지→회전 시 툭 터지듯 도는 것 자체가 추정을 어렵게 함
+**적용한 수정 (펌웨어 3곳)**:
+```cpp
+const unsigned long IMU_INTERVAL = 25;    // 50 → 25 (20Hz → 40Hz)
+Wire.write(0x08);                          // GYRO_CONFIG: 0x00(±250) → 0x08(±500dps)
+const unsigned long SEND_INTERVAL = 250;   // 200 → 250 (초음파 주기 늘려 40Hz 확보)
+```
+**★브릿지 실행 시 `gyro_scale:=65.5` 필수** (±500dps는 65.5 LSB/°/s. 안 주면 회전량 2배로 계산됨)
 
-**권장 접근**: 1번(샘플링 40Hz) → 2번(범위 ±500) 순으로 하나씩. 한 번에 하나만 바꾸고 `map→odom` 보정량으로 판정.
+**검증 결과**:
+| 지표 | 수정 전 | 수정 후 |
+|---|---|---|
+| IMU 수신율 | 20Hz | **37.6Hz** |
+| map→odom yaw 보정 (360도 회전 시) | 10~28도 | **0.4도** |
 
-**판정 지표**: `ros2 run tf2_ros tf2_echo map odom` — 회전 중 yaw 보정이 **몇 도 이내면 양호**, 10도 이상이면 EKF 자세 추정이 틀린 것.
+→ slam이 EKF 자세를 거의 그대로 수용 = 자세 추정이 실제와 일치.
+
+---
+
+## ★ 매핑 주행 노하우 (v1 실패 → v2 성공에서 얻은 것)
+
+같은 설정으로도 **주행 방식에 따라 지도 품질이 크게 갈림**.
+
+**v1 (실패)**: 평소 속도로 주행 → 2D pgm에서 오른쪽 영역 벽이 여러 겹으로 갈라짐
+**v2 (성공)**: 아래 원칙 적용 → 벽이 한 겹 직선으로 깔끔
+
+**원칙**:
+1. **회전 최소화** — 직진으로 갈 수 있는 데까지 가고, 꼭 필요할 때만 회전. 회전이 오차의 주원인.
+2. **회전 후 3초 완전정지** — 예외 없이. slam이 스캔매칭으로 자세를 재정렬할 시간.
+3. **전체적으로 천천히** — 급하게 가면 반드시 깨짐.
+4. **RViz 실시간 감시** — 벽이 두 겹으로 보이면 즉시 멈추고 5~10초 대기.
+5. **한 바퀴 돌아 출발점 복귀** — 루프클로저로 지도 정렬.
+
+**★품질 판정은 반드시 2D pgm으로.** RViz 3D 뷰에서는 괜찮아 보여도 2D로 보면 벽 중복이 드러남.
+```bash
+# WSL에서
+scp daehan@192.168.45.100:~/ros2_ws/maps/my_real_map_v2.* /mnt/c/ros2slam/maps/
+cd /mnt/c/ros2slam/maps
+python3 -c "from PIL import Image; Image.open('my_real_map_v2.pgm').save('my_real_map_v2.png')"
+```
 
 ---
 
 ## 🔜 다음 할 일
 
-### 우선순위 1 — 매핑 완성 (4단계 마무리)
-- 위 "남은 문제" 후보들 순차 검증
-- 지도 저장: `ros2 run nav2_map_server map_saver_cli -f ~/ros2_ws/maps/my_real_map`
-- pgm 파일로 품질 확인 (RViz 3D 뷰보다 정확한 판단 가능)
+### 우선순위 1 — 5단계 자율주행 (Nav2) ★다음 세션
+저장된 `my_real_map_v2`를 기반으로 A(지도)→B(단일목표)→C(다지점순회). 최종목표 C.
+
+**준비사항**:
+- **★turn_gain 1.0으로 복귀** — Nav2 컨트롤러가 회전반경을 직접 계산하므로 증폭하면 경로추종이 틀어짐.
+  (teleop 수동주행용 5.0은 Nav2에서 쓰면 안 됨)
+- Nav2 설치: `sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup`
+- **AMCL**로 저장된 지도 위 위치추정 (slam_toolbox 대신)
+- **Rotation Shim Controller** — 회전먼저→직진 방식. 데드존(int8 80~127, 47칸)으로 곡선이 불가능한 본 로봇에 적합
+- **goal_tolerance 넉넉히** — 최저속도 0.225m/s 고정이라 정밀접근 시 오버슈트 가능
+- 배터리 필수 (QCY PB10C 10000mAh)
 
 ### 우선순위 2 — 통합 런치파일
-현재 매번 7개 창을 수동으로 띄워야 함. 하나의 런치파일로 묶을 것:
-static TF ×2 → 라이다 → 브릿지 → rf2o(no_tf) → EKF → slam
+현재 매번 8개 창을 수동으로 띄워야 함. 하나로 묶을 것:
+static TF ×2 → 라이다 → 브릿지 → rf2o(no_tf) → EKF → slam(또는 AMCL)
 
-### 우선순위 3 — 5단계 자율주행 (Nav2)
-- A(지도)→B(단일목표)→C(다지점순회). 최종목표 C.
-- **turn_gain 1.0 복귀**, Rotation Shim Controller로 회전 처리
-- 데드존 대응: goal_tolerance 넉넉히
-- 배터리 필수 (QCY PB10C 10000mAh)
+### 우선순위 3 — 남은 개선 여지 (급하지 않음)
+- **직진 시 미세하게 휨** — `right_trim` 재조정. 바닥 직선 따라 2m 주행으로 값 찾기
+- **IMU 타임스탬프** — 브릿지가 `now()` 사용(측정 시각 아님). 현재 품질로 충분하나 더 올리려면 손볼 것
+- **라이다 받침 강성** — ㄷ자 종이박스. ㅁ자로 막거나 기둥 보강하면 진동 감소
+- **엔코더** — 근본 해결책이지만 현재 불필요. 면접에서 "개선한다면?" 질문엔 "엔코더 추가가 1순위"로 답하는 게 정석
 
 ---
 
@@ -287,9 +326,9 @@ ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_link imu_link
 source ~/ros2_ws/install/setup.bash
 ros2 launch sllidar_ros2 sllidar_a1_launch.py serial_port:=/dev/rplidar frame_id:=laser
 
-# 창4 — 브릿지 (IMU 발행 포함)
+# 창4 — 브릿지 (IMU 발행 포함) ★gyro_scale 65.5 필수 (±500dps)
 source ~/ros2_ws/install/setup.bash
-ros2 run amr_bridge bridge_node --ros-args -p turn_gain:=5.0 -p cmd_timeout:=0.8
+ros2 run amr_bridge bridge_node --ros-args -p turn_gain:=5.0 -p cmd_timeout:=0.8 -p gyro_scale:=65.5
 
 # 창5 — rf2o (★TF 끈 버전)
 source ~/ros2_ws/install/setup.bash
@@ -354,4 +393,14 @@ ros2 topic hz /imu /odom_rf2o /scan        # 입력 확인
 - `config/my_mapper.yaml` — minimum_travel 조정본
 - `launch/rf2o_no_tf.launch.py` — rf2o TF 비활성 런치
 - `docs/HANDOVER6.md` — 이 문서
-- `maps/` — 실주행 지도 (저장 예정)
+- `maps/my_real_map_v2.pgm/.yaml` — ★실주행 지도 (4단계 결과물). v1은 벽 중복으로 폐기
+
+---
+
+## 📌 다음 세션 시작 체크리스트
+
+1. HANDOVER6.md 업로드 → 맥락 복원
+2. 8창 띄우기 (아래 "실행법") — **브릿지에 `gyro_scale:=65.5` 빠뜨리지 말 것**
+3. `tf2_echo map base_link`로 TF 체인 확인
+4. Nav2 설치 후 `my_real_map_v2`로 AMCL 기동
+5. **turn_gain 1.0으로 복귀** 후 Nav2 테스트
