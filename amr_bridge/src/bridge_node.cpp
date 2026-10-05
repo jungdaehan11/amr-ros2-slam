@@ -28,9 +28,17 @@ public:
         stop_eps_   = declare_parameter<double>("stop_epsilon", 0.01);
         cmd_timeout_= declare_parameter<double>("cmd_timeout", 0.5);
         turn_gain_  = declare_parameter<double>("turn_gain", 3.0);
+        ttd_        = declare_parameter<bool>("turn_then_drive", false);
+        ttd_thresh_ = declare_parameter<double>("ttd_ang_thresh", 0.5);
 
         boost_add_   = declare_parameter<int>("boost_add", 40);
         boost_ticks_ = declare_parameter<int>("boost_ticks", 4);
+
+        // ★끊어가기(pulse): on_ticks 동안 구동 → off_ticks 동안 정지 반복
+        //   AMCL이 정지 구간에 스캔매칭으로 자세를 재정렬할 시간을 준다.
+        //   0이면 비활성(연속 구동).
+        pulse_on_ticks_  = declare_parameter<int>("pulse_on_ticks", 0);
+        pulse_off_ticks_ = declare_parameter<int>("pulse_off_ticks", 0);
 
         // ★IMU 파라미터
         gyro_scale_ = declare_parameter<double>("gyro_scale", 131.0);   // LSB per deg/s (±250dps)
@@ -77,6 +85,10 @@ private:
     void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
         double lin = msg->linear.x;
         double ang = msg->angular.z;
+        if (ttd_ && std::fabs(lin) > 1e-3) {
+            if (std::fabs(ang) > ttd_thresh_) lin = 0.0;
+            else                              ang = 0.0;
+        }
         double v_left  = lin - ang * (wheel_sep_ / 2.0) * turn_gain_;
         double v_right = lin + ang * (wheel_sep_ / 2.0) * turn_gain_;
         int8_t l = velToInt8(v_left);
@@ -109,12 +121,30 @@ private:
         }
 
         int8_t out_l = target_l_, out_r = target_r_;
+
+        // ★끊어가기: 주기적으로 정지 구간을 삽입
+        if (pulse_on_ticks_ > 0 && pulse_off_ticks_ > 0 &&
+            (target_l_ != 0 || target_r_ != 0)) {
+            ++pulse_counter_;
+            int period = pulse_on_ticks_ + pulse_off_ticks_;
+            if ((pulse_counter_ % period) >= pulse_on_ticks_) {
+                serial_.write(buildArduinoSetPWM(0, 0));
+                return;                     // 정지 구간
+            }
+        } else {
+            pulse_counter_ = 0;
+        }
+
         if (boost_remaining_ > 0) {
             out_l = applyBoost(target_l_);
             out_r = applyBoost(target_r_);
             --boost_remaining_;
         }
         serial_.write(buildArduinoSetPWM(out_l, out_r));
+        static int dbg = 0;
+        if (++dbg % 10 == 0 && (out_l != 0 || out_r != 0))
+            RCLCPP_INFO(get_logger(), "TX L=%d R=%d (target %d/%d)",
+                        (int)out_l, (int)out_r, (int)target_l_, (int)target_r_);
     }
 
     void publishImu(int16_t raw) {
@@ -187,7 +217,11 @@ private:
     int right_trim_;
     double stop_eps_, cmd_timeout_;
     double turn_gain_;
+    bool ttd_;
+    double ttd_thresh_;
     int boost_add_, boost_ticks_;
+    int pulse_on_ticks_, pulse_off_ticks_;
+    int pulse_counter_ = 0;
     double gyro_scale_, gyro_sign_, imu_var_;
     std::string imu_frame_;
 
